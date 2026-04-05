@@ -2,7 +2,7 @@
 ## Title: SuperInspect_Transmog
 ## Notes: Adds Turtle WoW transmog tooltip lines to SuperInspect item slots.
 ## Author: ZythDr
-## Version: 1.1
+## Version: 1.2
 ## Dependencies: SuperInspect
 ## OptionalDeps: SuperInspect_UI
 

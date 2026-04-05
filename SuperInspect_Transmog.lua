@@ -9,6 +9,13 @@ SITransmog.originalInspectFrameShow = nil
 SITransmog.originalPaperDollOnShow = nil
 SITransmog.originalSlotOnEnter = nil
 SITransmog.originalSlotUpdate = nil
+SITransmog.indicatorTexture = "Interface\\AddOns\\SuperInspect_Transmog\\TransmogTexture"
+SITransmog.indicatorSize = 51
+SITransmog.indicatorOffsetX = 7
+SITransmog.indicatorOffsetY = -7
+SITransmog.indicatorFrameLevelOffset = 0
+SITransmog.indicatorAlpha = 0.85
+SITransmog.indicatorTexCoord = { 0, 1, 0, 1 }
 
 local superInspectSlotFrames = {
 	"SuperInspect_InspectHeadSlot",
@@ -26,9 +33,6 @@ local superInspectSlotFrames = {
 	"SuperInspect_InspectRangedSlot",
 	"SuperInspect_InspectTabardSlot",
 }
-
-local slotIndicatorTexture = "Interface\\Cursor\\Item"
-local slotIndicatorSize = 20
 
 local function GetTransmogLabel()
 	return TRANSMOG_CHANGED_TO or "Transmogrified to:"
@@ -122,6 +126,59 @@ function SITransmog:GetTooltipOwner()
 	end
 end
 
+function SITransmog:ApplyIndicatorLayout(button)
+	local indicator
+	local indicatorFrame
+	local texCoord
+	local coordCount
+
+	if not button then
+		return
+	end
+
+	indicatorFrame = button.SITransmogIndicatorFrame
+	indicator = button.SITransmogIndicator
+	if not indicatorFrame or not indicator then
+		return
+	end
+
+	indicatorFrame:ClearAllPoints()
+	indicatorFrame:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", self.indicatorOffsetX or 0, self.indicatorOffsetY or 0)
+	indicatorFrame:SetWidth(self.indicatorSize or 20)
+	indicatorFrame:SetHeight(self.indicatorSize or 20)
+	indicatorFrame:SetFrameStrata(button:GetFrameStrata())
+	indicatorFrame:SetFrameLevel(button:GetFrameLevel() + (self.indicatorFrameLevelOffset or 0))
+
+	indicator:SetTexture(self.indicatorTexture)
+	indicator:SetAllPoints(indicatorFrame)
+	indicator:SetAlpha(self.indicatorAlpha or 1)
+
+	texCoord = self.indicatorTexCoord
+	coordCount = texCoord and getn(texCoord) or 0
+	if coordCount == 8 then
+		indicator:SetTexCoord(texCoord[1], texCoord[2], texCoord[3], texCoord[4], texCoord[5], texCoord[6], texCoord[7], texCoord[8])
+	else
+		indicator:SetTexCoord(0, 1, 0, 1)
+	end
+end
+
+function SITransmog:ApplyIndicatorStyle(style)
+	if not style then
+		return
+	end
+
+	self.indicatorTexture = style.texture or self.indicatorTexture
+	self.indicatorSize = style.size or self.indicatorSize
+	self.indicatorOffsetX = style.offsetX or 0
+	self.indicatorOffsetY = style.offsetY or 0
+	self.indicatorFrameLevelOffset = style.frameLevelOffset or 0
+	self.indicatorAlpha = style.alpha or 1
+	self.indicatorTexCoord = style.texCoord
+
+	self:RefreshSlotIndicators()
+	self:InjectTooltipText()
+end
+
 function SITransmog:EnsureSlotIndicator(button)
 	local indicator
 	local indicatorFrame
@@ -136,22 +193,14 @@ function SITransmog:EnsureSlotIndicator(button)
 	end
 
 	indicatorFrame = CreateFrame("Frame", button:GetName() .. "SITransmogIndicatorFrame", button)
-	indicatorFrame:ClearAllPoints()
-	indicatorFrame:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 1, -1)
-	indicatorFrame:SetWidth(slotIndicatorSize)
-	indicatorFrame:SetHeight(slotIndicatorSize)
-	indicatorFrame:SetFrameStrata(button:GetFrameStrata())
-	indicatorFrame:SetFrameLevel(button:GetFrameLevel() + 8)
 
 	indicator = indicatorFrame:CreateTexture(button:GetName() .. "SITransmogIndicator", "OVERLAY")
-	indicator:SetTexture(slotIndicatorTexture)
-	indicator:SetAllPoints(indicatorFrame)
-	indicator:SetTexCoord(1, 1, 1, 0, 0, 1, 0, 0)
 	indicator:SetVertexColor(1, 1, 1, 1)
 	indicator:Hide()
 
 	button.SITransmogIndicatorFrame = indicatorFrame
 	button.SITransmogIndicator = indicator
+	self:ApplyIndicatorLayout(button)
 	return indicator
 end
 
@@ -168,6 +217,7 @@ function SITransmog:UpdateSlotIndicator(button)
 	if not indicator then
 		return
 	end
+	self:ApplyIndicatorLayout(button)
 
 	indicatorFrame = button.SITransmogIndicatorFrame
 
