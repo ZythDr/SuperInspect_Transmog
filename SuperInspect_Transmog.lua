@@ -1,0 +1,301 @@
+local SITransmog = CreateFrame("Frame", "SuperInspectTransmogFrame")
+local SITransmogScan = CreateFrame("GameTooltip", "SITransmogScan", UIParent, "GameTooltipTemplate")
+local SITransmogTooltipHook = CreateFrame("Frame", "SITransmogTooltipHook", GameTooltip)
+
+SITransmog.requestDelay = nil
+SITransmog.refreshDelay = nil
+SITransmog.hooked = nil
+SITransmog.originalInspectFrameShow = nil
+SITransmog.originalPaperDollOnShow = nil
+SITransmog.originalSlotOnEnter = nil
+
+local superInspectSlotFrames = {
+	"SuperInspect_InspectHeadSlot",
+	"SuperInspect_InspectShoulderSlot",
+	"SuperInspect_InspectShirtSlot",
+	"SuperInspect_InspectChestSlot",
+	"SuperInspect_InspectWaistSlot",
+	"SuperInspect_InspectLegsSlot",
+	"SuperInspect_InspectFeetSlot",
+	"SuperInspect_InspectWristSlot",
+	"SuperInspect_InspectHandsSlot",
+	"SuperInspect_InspectBackSlot",
+	"SuperInspect_InspectMainHandSlot",
+	"SuperInspect_InspectSecondaryHandSlot",
+	"SuperInspect_InspectRangedSlot",
+	"SuperInspect_InspectTabardSlot",
+}
+
+local function GetTransmogLabel()
+	return TRANSMOG_CHANGED_TO or "Transmogrified to:"
+end
+
+local function TooltipHasTransmogText(tooltip, label)
+	local index
+	local numLines
+	local tooltipName
+
+	if not tooltip or not label then
+		return nil
+	end
+
+	numLines = tooltip:NumLines() or 0
+	tooltipName = tooltip:GetName()
+	if not tooltipName or numLines == 0 then
+		return nil
+	end
+
+	for index = 1, numLines do
+		local line = _G[tooltipName .. "TextLeft" .. index]
+		if line then
+			local text = line:GetText()
+			if text and string.find(text, label, 1, true) then
+				return true
+			end
+		end
+	end
+end
+
+local function CacheItem(itemID)
+	if not itemID or itemID == 0 then
+		return
+	end
+
+	if Transmog and Transmog.CacheItem then
+		Transmog:CacheItem(itemID)
+		return
+	end
+
+	SITransmogScan:SetOwner(UIParent, "ANCHOR_NONE")
+	SITransmogScan:SetHyperlink("item:" .. itemID)
+	SITransmogScan:Hide()
+	SITransmogScan:ClearLines()
+end
+
+local function GetInspectedUnit()
+	if SuperInspect_InvFrame and SuperInspect_InvFrame.unit and UnitExists(SuperInspect_InvFrame.unit) then
+		return SuperInspect_InvFrame.unit
+	end
+
+	if UnitExists("target") then
+		return "target"
+	end
+end
+
+function SITransmog:EnsureInspectUILoaded()
+	if not IsAddOnLoaded("Blizzard_InspectUI") then
+		LoadAddOn("Blizzard_InspectUI")
+	end
+
+	return IsAddOnLoaded("Blizzard_InspectUI") and InspectFrame and true or false
+end
+
+function SITransmog:SyncInspectUnit()
+	local unit = GetInspectedUnit()
+	if not unit then
+		return nil
+	end
+
+	if not self:EnsureInspectUILoaded() then
+		return nil
+	end
+
+	InspectFrame.unit = unit
+	return unit
+end
+
+function SITransmog:GetTooltipOwner()
+	local index
+	for index = 1, getn(superInspectSlotFrames) do
+		local button = _G[superInspectSlotFrames[index]]
+		if button and GameTooltip:IsOwned(button) then
+			return button
+		end
+	end
+end
+
+function SITransmog:QueueUpdate()
+	self:SetScript("OnUpdate", function()
+		SITransmog:OnUpdate(arg1)
+	end)
+end
+
+function SITransmog:ScheduleRequest(delay)
+	self.requestDelay = delay or 0
+	self:QueueUpdate()
+end
+
+function SITransmog:ScheduleTooltipRefresh(delay)
+	self.refreshDelay = delay or 0
+	self:QueueUpdate()
+end
+
+function SITransmog:RequestTransmogData()
+	local unit = self:SyncInspectUnit()
+	if not unit then
+		return
+	end
+
+	local playerName = UnitName(unit)
+	if not playerName then
+		return
+	end
+
+	SendAddonMessage("TW_CHAT_MSG_WHISPER<" .. playerName .. ">", "INSShowTransmogs", "GUILD")
+end
+
+function SITransmog:InjectTooltipText()
+	if not SuperInspect_InvFrame or not SuperInspect_InvFrame:IsVisible() then
+		return
+	end
+
+	local button = self:GetTooltipOwner()
+	if not button then
+		return
+	end
+
+	local data = INSPECT_TRANSMOG_DATA and INSPECT_TRANSMOG_DATA[button:GetID()]
+	if not data or not data.transmogID then
+		return
+	end
+
+	local line2 = GameTooltipTextLeft2
+	if not line2 or not line2:GetText() then
+		return
+	end
+
+	local transmogLabel = GetTransmogLabel()
+	if TooltipHasTransmogText(GameTooltip, transmogLabel) then
+		return
+	end
+
+	local itemName = GetItemInfo(data.transmogID)
+	if not itemName then
+		CacheItem(data.transmogID)
+		self:ScheduleTooltipRefresh(0.05)
+		return
+	end
+
+	line2:SetText("|cfff471f5" .. transmogLabel .. "\n" .. itemName .. "|r\n" .. line2:GetText())
+	GameTooltip:Show()
+end
+
+function SITransmog:OnUpdate(elapsed)
+	if self.requestDelay then
+		self.requestDelay = self.requestDelay - elapsed
+		if self.requestDelay <= 0 then
+			self.requestDelay = nil
+			self:RequestTransmogData()
+		end
+	end
+
+	if self.refreshDelay then
+		self.refreshDelay = self.refreshDelay - elapsed
+		if self.refreshDelay <= 0 then
+			self.refreshDelay = nil
+			self:InjectTooltipText()
+		end
+	end
+
+	if not self.requestDelay and not self.refreshDelay then
+		self:SetScript("OnUpdate", nil)
+	end
+end
+
+function SITransmog:HookSuperInspect()
+	if self.hooked then
+		return
+	end
+
+	if type(SuperInspect_InspectFrame_Show) ~= "function" then
+		return
+	end
+
+	if type(SuperInspect_InspectPaperDollItemSlotButton_OnEnter) ~= "function" then
+		return
+	end
+
+	self.originalInspectFrameShow = SuperInspect_InspectFrame_Show
+	SuperInspect_InspectFrame_Show = function(unit)
+		SITransmog.originalInspectFrameShow(unit)
+		SITransmog:SyncInspectUnit()
+		SITransmog:ScheduleRequest(0.05)
+	end
+
+	if type(SuperInspect_InspectPaperDollFrame_OnShow) == "function" then
+		self.originalPaperDollOnShow = SuperInspect_InspectPaperDollFrame_OnShow
+		SuperInspect_InspectPaperDollFrame_OnShow = function()
+			SITransmog.originalPaperDollOnShow()
+			SITransmog:SyncInspectUnit()
+			SITransmog:ScheduleRequest(0.05)
+		end
+	end
+
+	self.originalSlotOnEnter = SuperInspect_InspectPaperDollItemSlotButton_OnEnter
+	SuperInspect_InspectPaperDollItemSlotButton_OnEnter = function()
+		SITransmog.originalSlotOnEnter()
+		SITransmog:SyncInspectUnit()
+		SITransmog:InjectTooltipText()
+		SITransmog:ScheduleRequest(0)
+	end
+
+	SITransmogTooltipHook:SetScript("OnShow", function()
+		SITransmog:InjectTooltipText()
+	end)
+	SITransmogTooltipHook:Show()
+
+	self.hooked = true
+end
+
+function SITransmog:HandleAddonMessage(prefix, message, sender)
+	local isStart
+
+	if prefix ~= "TW_CHAT_MSG_WHISPER" then
+		return
+	end
+
+	if not message or not string.find(message, "INSTransmogs", 1, true) then
+		return
+	end
+
+	if not self:SyncInspectUnit() then
+		return
+	end
+
+	isStart = string.find(message, "INSTransmogs;start;", 1, true)
+		or string.find(message, "INSTransmogs:start:", 1, true)
+
+	if type(InspectPaperDollFrame_HandleMessage) == "function" then
+		InspectPaperDollFrame_HandleMessage(message, sender)
+		if not isStart then
+			self:ScheduleTooltipRefresh(0)
+		end
+	end
+end
+
+function SITransmog:HandleEvent(eventName, firstArg, secondArg, thirdArg, fourthArg)
+	if eventName == "PLAYER_LOGIN" then
+		if IsAddOnLoaded("SuperInspect_UI") then
+			self:HookSuperInspect()
+		end
+		return
+	end
+
+	if eventName == "ADDON_LOADED" then
+		if firstArg == "SuperInspect_UI" then
+			self:HookSuperInspect()
+		end
+		return
+	end
+
+	if eventName == "CHAT_MSG_ADDON" then
+		self:HandleAddonMessage(firstArg, secondArg, fourthArg)
+	end
+end
+
+SITransmog:RegisterEvent("PLAYER_LOGIN")
+SITransmog:RegisterEvent("ADDON_LOADED")
+SITransmog:RegisterEvent("CHAT_MSG_ADDON")
+SITransmog:SetScript("OnEvent", function()
+	SITransmog:HandleEvent(event, arg1, arg2, arg3, arg4)
+end)
