@@ -1,10 +1,8 @@
 # SuperInspect_Transmog
 
-SuperInspect_Transmog is a Turtle WoW addon for WoW 1.12.1 that adds Turtle's native `Transmogrified to:` tooltip line to SuperInspect item slot tooltips.
+SuperInspect_Transmog is a plugin for SuperInspect. It adds the "Transmogrified to:" text to tooltips when using SuperInspect on Turtle WoW.
 
 ## Requirements
-
-- Turtle WoW client with inspect transmog support
 - SuperInspect
 - SuperInspect_UI
 
@@ -12,11 +10,7 @@ SuperInspect_Transmog is a Turtle WoW addon for WoW 1.12.1 that adds Turtle's na
 
 1. Place the `SuperInspect_Transmog` folder in `Interface/AddOns`.
 2. Make sure `SuperInspect` and `SuperInspect_UI` are enabled.
-3. Reload the UI.
 
-## Version
-
-Current release: `1.0`
 
 ## Notes
 
