@@ -11,8 +11,9 @@ It also adds a small "indicator" texture to transmogrified armor slots in the fo
 
 ## Installation
 
-1. Place the `SuperInspect_Transmog` folder in `Interface/AddOns`.
-2. Make sure `SuperInspect` and `SuperInspect_UI` are enabled.
+1. Download the addon from the green `Code` button above, or download the latest Release and extract the zip file.
+2. Place the `SuperInspect_Transmog` folder in `Interface/AddOns`.
+3. Make sure `SuperInspect` and `SuperInspect_UI` are enabled.
 
 
 ## Notes
