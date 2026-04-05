@@ -8,6 +8,7 @@ SITransmog.hooked = nil
 SITransmog.originalInspectFrameShow = nil
 SITransmog.originalPaperDollOnShow = nil
 SITransmog.originalSlotOnEnter = nil
+SITransmog.originalSlotUpdate = nil
 
 local superInspectSlotFrames = {
 	"SuperInspect_InspectHeadSlot",
@@ -26,8 +27,15 @@ local superInspectSlotFrames = {
 	"SuperInspect_InspectTabardSlot",
 }
 
+local slotIndicatorTexture = "Interface\\Cursor\\Item"
+local slotIndicatorSize = 20
+
 local function GetTransmogLabel()
 	return TRANSMOG_CHANGED_TO or "Transmogrified to:"
+end
+
+local function GetSlotButton(index)
+	return _G[superInspectSlotFrames[index]]
 end
 
 local function TooltipHasTransmogText(tooltip, label)
@@ -107,9 +115,103 @@ end
 function SITransmog:GetTooltipOwner()
 	local index
 	for index = 1, getn(superInspectSlotFrames) do
-		local button = _G[superInspectSlotFrames[index]]
+		local button = GetSlotButton(index)
 		if button and GameTooltip:IsOwned(button) then
 			return button
+		end
+	end
+end
+
+function SITransmog:EnsureSlotIndicator(button)
+	local indicator
+	local indicatorFrame
+
+	if not button then
+		return nil
+	end
+
+	indicator = button.SITransmogIndicator
+	if indicator then
+		return indicator
+	end
+
+	indicatorFrame = CreateFrame("Frame", button:GetName() .. "SITransmogIndicatorFrame", button)
+	indicatorFrame:ClearAllPoints()
+	indicatorFrame:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 1, -1)
+	indicatorFrame:SetWidth(slotIndicatorSize)
+	indicatorFrame:SetHeight(slotIndicatorSize)
+	indicatorFrame:SetFrameStrata(button:GetFrameStrata())
+	indicatorFrame:SetFrameLevel(button:GetFrameLevel() + 8)
+
+	indicator = indicatorFrame:CreateTexture(button:GetName() .. "SITransmogIndicator", "OVERLAY")
+	indicator:SetTexture(slotIndicatorTexture)
+	indicator:SetAllPoints(indicatorFrame)
+	indicator:SetTexCoord(1, 1, 1, 0, 0, 1, 0, 0)
+	indicator:SetVertexColor(1, 1, 1, 1)
+	indicator:Hide()
+
+	button.SITransmogIndicatorFrame = indicatorFrame
+	button.SITransmogIndicator = indicator
+	return indicator
+end
+
+function SITransmog:UpdateSlotIndicator(button)
+	local data
+	local indicator
+	local indicatorFrame
+
+	if not button then
+		return
+	end
+
+	indicator = self:EnsureSlotIndicator(button)
+	if not indicator then
+		return
+	end
+
+	indicatorFrame = button.SITransmogIndicatorFrame
+
+	if not SuperInspect_InvFrame or not SuperInspect_InvFrame:IsVisible() or not button.hasItem then
+		if indicatorFrame then
+			indicatorFrame:Hide()
+		end
+		indicator:Hide()
+		return
+	end
+
+	data = INSPECT_TRANSMOG_DATA and INSPECT_TRANSMOG_DATA[button:GetID()]
+	if data and data.transmogID then
+		if indicatorFrame then
+			indicatorFrame:Show()
+		end
+		indicator:Show()
+		return
+	end
+
+	if indicatorFrame then
+		indicatorFrame:Hide()
+	end
+	indicator:Hide()
+end
+
+function SITransmog:RefreshSlotIndicators()
+	local index
+
+	for index = 1, getn(superInspectSlotFrames) do
+		self:UpdateSlotIndicator(GetSlotButton(index))
+	end
+end
+
+function SITransmog:ClearSlotIndicators()
+	local index
+
+	for index = 1, getn(superInspectSlotFrames) do
+		local button = GetSlotButton(index)
+		if button and button.SITransmogIndicator then
+			button.SITransmogIndicator:Hide()
+			if button.SITransmogIndicatorFrame then
+				button.SITransmogIndicatorFrame:Hide()
+			end
 		end
 	end
 end
@@ -215,10 +317,19 @@ function SITransmog:HookSuperInspect()
 		return
 	end
 
+	if type(SuperInspect_InspectPaperDollItemSlotButton_Update) == "function" then
+		self.originalSlotUpdate = SuperInspect_InspectPaperDollItemSlotButton_Update
+		SuperInspect_InspectPaperDollItemSlotButton_Update = function(button)
+			SITransmog.originalSlotUpdate(button)
+			SITransmog:UpdateSlotIndicator(button)
+		end
+	end
+
 	self.originalInspectFrameShow = SuperInspect_InspectFrame_Show
 	SuperInspect_InspectFrame_Show = function(unit)
 		SITransmog.originalInspectFrameShow(unit)
 		SITransmog:SyncInspectUnit()
+		SITransmog:ClearSlotIndicators()
 		SITransmog:ScheduleRequest(0.05)
 	end
 
@@ -227,6 +338,8 @@ function SITransmog:HookSuperInspect()
 		SuperInspect_InspectPaperDollFrame_OnShow = function()
 			SITransmog.originalPaperDollOnShow()
 			SITransmog:SyncInspectUnit()
+			SITransmog:ClearSlotIndicators()
+			SITransmog:RefreshSlotIndicators()
 			SITransmog:ScheduleRequest(0.05)
 		end
 	end
@@ -235,6 +348,7 @@ function SITransmog:HookSuperInspect()
 	SuperInspect_InspectPaperDollItemSlotButton_OnEnter = function()
 		SITransmog.originalSlotOnEnter()
 		SITransmog:SyncInspectUnit()
+		SITransmog:UpdateSlotIndicator(this)
 		SITransmog:InjectTooltipText()
 		SITransmog:ScheduleRequest(0)
 	end
@@ -267,6 +381,7 @@ function SITransmog:HandleAddonMessage(prefix, message, sender)
 
 	if type(InspectPaperDollFrame_HandleMessage) == "function" then
 		InspectPaperDollFrame_HandleMessage(message, sender)
+		self:RefreshSlotIndicators()
 		if not isStart then
 			self:ScheduleTooltipRefresh(0)
 		end

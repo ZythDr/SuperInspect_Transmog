@@ -1,6 +1,7 @@
 # SuperInspect_Transmog
 
 SuperInspect_Transmog is a plugin for SuperInspect. It adds the "Transmogrified to:" text to tooltips when using SuperInspect on Turtle WoW.
+It also adds a small "indicator" texture to transmogrified armor slots in the form of a bottom-right triangle.
 
 ## Requirements
 - SuperInspect
